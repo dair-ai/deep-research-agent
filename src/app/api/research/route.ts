@@ -46,6 +46,9 @@ function detectStageChange(text: string): { stage: PipelineStage; description: s
 
 /**
  * Run research using Vercel Sandbox (for serverless environments)
+ *
+ * Only streams stage_change events and the final result to the frontend.
+ * All intermediate messages are logged to file but not sent to the client.
  */
 async function runResearchWithSandbox(
   topic: string,
@@ -79,6 +82,7 @@ async function runResearchWithSandbox(
       };
       log("STAGE", `Pipeline stage: ${stage} - ${description}`);
       researchLogger.logStage(stage, description);
+      // Emit stage changes to frontend for progress tracking
       controller.enqueue(encoder.encode(`data: ${JSON.stringify(stageEvent)}\n\n`));
     }
   };
@@ -113,6 +117,7 @@ async function runResearchWithSandbox(
   async function processSandboxMessage(sandboxMsg: SandboxMessage) {
     if (sandboxMsg.type === "status") {
       log("SANDBOX", sandboxMsg.data);
+      // Emit status updates (sandbox progress) to frontend
       controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "status", content: sandboxMsg.data })}\n\n`));
     } else if (sandboxMsg.type === "result") {
       try {
@@ -154,6 +159,7 @@ async function runResearchWithSandbox(
               }
             }
           }
+          // Don't send assistant messages to frontend
         } else if (message.type === "user" && message.tool_use_result) {
           const result = typeof message.tool_use_result === "string"
             ? message.tool_use_result
@@ -180,6 +186,7 @@ async function runResearchWithSandbox(
             }
             lastSubagentType = null;
           }
+          // Don't send tool results to frontend
         } else if (message.type === "result") {
           if (message.result) {
             const finalOutput = typeof message.result === 'string'
@@ -188,9 +195,11 @@ async function runResearchWithSandbox(
             researchLogger.logFinalAgentOutput(finalOutput);
           }
           researchLogger.logCosts({ total_cost_usd: message.total_cost_usd });
-        }
 
-        controller.enqueue(encoder.encode(`data: ${sandboxMsg.data}\n\n`));
+          // ONLY send the final result message to the frontend
+          controller.enqueue(encoder.encode(`data: ${sandboxMsg.data}\n\n`));
+        }
+        // Don't send other message types to frontend
       } catch {
         log("SANDBOX", `Non-JSON result: ${sandboxMsg.data}`);
       }
@@ -210,6 +219,9 @@ async function runResearchWithSandbox(
 
 /**
  * Run research using direct SDK call (for local development)
+ *
+ * Only streams stage_change events and the final result to the frontend.
+ * All intermediate messages are logged to file but not sent to the client.
  */
 async function runResearchDirect(
   topic: string,
@@ -236,6 +248,7 @@ async function runResearchDirect(
       };
       log("STAGE", `Pipeline stage: ${stage} - ${description}`);
       researchLogger.logStage(stage, description);
+      // Emit stage changes to frontend for progress tracking
       controller.enqueue(encoder.encode(`data: ${JSON.stringify(stageEvent)}\n\n`));
     }
   };
@@ -259,7 +272,7 @@ async function runResearchDirect(
   })) {
     messageCount++;
 
-    // Log based on message type
+    // Log based on message type (all logging goes to file, only final result to frontend)
     if (message.type === "assistant") {
       log("ASSISTANT", `Message #${messageCount} - Assistant response`);
       if (message.message?.content) {
@@ -313,6 +326,7 @@ async function runResearchDirect(
           });
         }
       }
+      // Don't send assistant messages to frontend
     } else if (message.type === "user" && message.tool_use_result) {
       // Capture tool outputs - complete, no truncation
       const result = typeof message.tool_use_result === "string"
@@ -343,6 +357,7 @@ async function runResearchDirect(
         }
         lastSubagentType = null;
       }
+      // Don't send tool results to frontend
     } else if (message.type === "result") {
       const resultData = message as Record<string, unknown>;
       log("RESULT", `Message #${messageCount} - Final result`, {
@@ -368,13 +383,14 @@ async function runResearchDirect(
       researchLogger.logCosts({
         total_cost_usd: message.total_cost_usd
       });
+
+      // ONLY send the final result message to the frontend
+      const data = JSON.stringify(message);
+      controller.enqueue(encoder.encode(`data: ${data}\n\n`));
     } else {
       log("MESSAGE", `Message #${messageCount} - Type: ${message.type}`, message);
+      // Don't send other message types to frontend
     }
-
-    // Send each message as a Server-Sent Event
-    const data = JSON.stringify(message);
-    controller.enqueue(encoder.encode(`data: ${data}\n\n`));
   }
 
   // Signal completion
