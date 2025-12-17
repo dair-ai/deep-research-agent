@@ -31,10 +31,106 @@ function getResearchScript(topic: string, exaApiKey: string, sessionId?: string)
   const sessionIdArg = sessionId ? `"${sessionId}"` : "undefined";
 
   return `
-const { query } = require("@anthropic-ai/claude-agent-sdk");
+const { query, createSdkMcpServer, tool } = require("@anthropic-ai/claude-agent-sdk");
+const { z } = require("zod");
+const Exa = require("exa-js").default;
 
 // API key passed from parent environment
 const EXA_API_KEY = "${exaApiKey}";
+
+// Initialize Exa client
+let exaClient = null;
+const getExaClient = () => {
+  if (exaClient) return exaClient;
+  console.log("[Exa] Creating client...");
+  exaClient = new Exa(EXA_API_KEY);
+  return exaClient;
+};
+
+// Create Exa search tools (same as local)
+const exaSearchTools = createSdkMcpServer({
+  name: "exa-research",
+  version: "1.0.0",
+  tools: [
+    tool(
+      "search",
+      "Search the web using neural search.",
+      {
+        query: z.string().describe("Search query"),
+        num_results: z.number().default(5).describe("Number of results"),
+        start_published_date: z.string().optional().describe("Filter: published after (YYYY-MM-DD)"),
+        end_published_date: z.string().optional().describe("Filter: published before (YYYY-MM-DD)")
+      },
+      async (args) => {
+        console.log("[Exa] search:", args.query.substring(0, 50) + "...");
+        try {
+          const exa = getExaClient();
+          const options = {
+            type: "neural",
+            numResults: args.num_results,
+            useAutoprompt: true,
+            contents: { text: { maxCharacters: 1500 } }
+          };
+          if (args.start_published_date) options.startPublishedDate = args.start_published_date;
+          if (args.end_published_date) options.endPublishedDate = args.end_published_date;
+
+          const results = await exa.searchAndContents(args.query, options);
+          console.log("[Exa] search done:", results.results.length, "results");
+
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                query: args.query,
+                total: results.results.length,
+                results: results.results.map(r => ({
+                  title: r.title || "Untitled",
+                  url: r.url,
+                  text: r.text || null
+                }))
+              }, null, 2)
+            }]
+          };
+        } catch (error) {
+          console.error("[Exa] search FAILED:", error.message);
+          return { content: [{ type: "text", text: JSON.stringify({ error: true, message: error.message }) }] };
+        }
+      }
+    ),
+    tool(
+      "get_contents",
+      "Get full content from URLs.",
+      {
+        urls: z.array(z.string()).describe("URLs to fetch"),
+        max_characters: z.number().default(3000).describe("Max chars per doc")
+      },
+      async (args) => {
+        console.log("[Exa] get_contents:", args.urls.length, "urls");
+        try {
+          const exa = getExaClient();
+          const contents = await exa.getContents(args.urls, { text: { maxCharacters: args.max_characters } });
+          console.log("[Exa] get_contents done:", contents.results.length, "docs");
+
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                documents: contents.results.map(doc => ({
+                  url: doc.url,
+                  title: doc.title || "Untitled",
+                  text: doc.text || "No content"
+                }))
+              }, null, 2)
+            }]
+          };
+        } catch (error) {
+          console.error("[Exa] get_contents FAILED:", error.message);
+          return { content: [{ type: "text", text: JSON.stringify({ error: true, message: error.message }) }] };
+        }
+      }
+    )
+  ]
+});
 
 // Research configuration matching our multi-agent pipeline
 const ORCHESTRATOR_PROMPT = \`You are a Research Orchestrator that coordinates a multi-agent research pipeline.
@@ -92,14 +188,7 @@ const config = {
   model: "claude-haiku-4-5-20251001",
   systemPrompt: ORCHESTRATOR_PROMPT,
   mcpServers: {
-    "exa-research": {
-      type: "stdio",
-      command: "npx",
-      args: ["-y", "exa-mcp-server"],
-      env: {
-        EXA_API_KEY: EXA_API_KEY
-      }
-    }
+    "exa-research": exaSearchTools
   },
   agents: SUBAGENTS,
   allowedTools: [
@@ -197,7 +286,8 @@ export async function* runResearchInSandbox(
       type: "commonjs",
       dependencies: {
         "@anthropic-ai/claude-agent-sdk": "latest",
-        "exa-mcp-server": "latest"
+        "exa-js": "latest",
+        "zod": "latest"
       }
     }, null, 2);
 
