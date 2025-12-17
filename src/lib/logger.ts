@@ -58,13 +58,23 @@ export class ResearchLogger {
   private logsDir: string;
   private session: SessionLog;
   private logFilePath: string;
+  private enabled: boolean;
 
   constructor(topic: string, sessionId: string) {
-    this.logsDir = path.join(process.cwd(), "logs");
+    // Use /tmp in serverless environments (Vercel), otherwise use local logs directory
+    const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+    this.logsDir = isServerless ? "/tmp/logs" : path.join(process.cwd(), "logs");
+    this.enabled = true;
 
     // Ensure logs directory exists
-    if (!fs.existsSync(this.logsDir)) {
-      fs.mkdirSync(this.logsDir, { recursive: true });
+    try {
+      if (!fs.existsSync(this.logsDir)) {
+        fs.mkdirSync(this.logsDir, { recursive: true });
+      }
+    } catch (error) {
+      // If we can't create the directory, disable file logging but continue
+      console.warn(`[ResearchLogger] Cannot create logs directory: ${error}. File logging disabled.`);
+      this.enabled = false;
     }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -222,8 +232,14 @@ export class ResearchLogger {
    * Write the current session state to markdown file
    */
   private writeLog(): void {
-    const md = this.generateMarkdown();
-    fs.writeFileSync(this.logFilePath, md, "utf-8");
+    if (!this.enabled) return;
+
+    try {
+      const md = this.generateMarkdown();
+      fs.writeFileSync(this.logFilePath, md, "utf-8");
+    } catch (error) {
+      console.warn(`[ResearchLogger] Failed to write log: ${error}`);
+    }
   }
 
   /**
