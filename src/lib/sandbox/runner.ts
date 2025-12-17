@@ -137,11 +137,31 @@ export async function* runResearchInSandbox(
   try {
     yield { type: "status", data: "Creating sandbox environment...", timestamp: Date.now() };
 
-    // Create sandbox with Node.js runtime
-    sandbox = await Sandbox.create({
+    // Build sandbox creation params
+    const sandboxParams: {
+      runtime: string;
+      timeout: number;
+      token?: string;
+      projectId?: string;
+      teamId?: string;
+    } = {
       runtime: "node22",
       timeout: ms("5m"), // 5 minutes
-    });
+    };
+
+    // Add credentials if available (for explicit auth)
+    if (process.env.VERCEL_API_TOKEN) {
+      sandboxParams.token = process.env.VERCEL_API_TOKEN;
+    }
+    if (process.env.VERCEL_PROJECT_ID) {
+      sandboxParams.projectId = process.env.VERCEL_PROJECT_ID;
+    }
+    if (process.env.VERCEL_TEAM_ID) {
+      sandboxParams.teamId = process.env.VERCEL_TEAM_ID;
+    }
+
+    // Create sandbox with Node.js runtime
+    sandbox = await Sandbox.create(sandboxParams);
 
     yield { type: "status", data: "Sandbox created, installing dependencies...", timestamp: Date.now() };
 
