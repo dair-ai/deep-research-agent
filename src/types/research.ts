@@ -1,7 +1,7 @@
 /**
  * Pipeline Stages for Multi-Agent Research System
  */
-export type PipelineStage = "orchestrator" | "planner" | "web-search" | "analysis" | "report-writer";
+export type PipelineStage = "orchestrator" | "planner" | "web-search" | "report-writer";
 
 /**
  * Stage progress tracking
@@ -30,7 +30,6 @@ export interface StageChangeMessage {
 export const PIPELINE_STAGES: { stage: PipelineStage; label: string; icon: string }[] = [
   { stage: "planner", label: "Planner", icon: "lightbulb" },
   { stage: "web-search", label: "Web Search", icon: "search" },
-  { stage: "analysis", label: "Analysis", icon: "chart" },
   { stage: "report-writer", label: "Report Writer", icon: "file-text" }
 ];
 
@@ -116,7 +115,6 @@ export function createInitialStages(): StageProgress[] {
   return [
     { stage: "planner", status: "pending" },
     { stage: "web-search", status: "pending" },
-    { stage: "analysis", status: "pending" },
     { stage: "report-writer", status: "pending" }
   ];
 }

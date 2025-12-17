@@ -6,12 +6,17 @@ import Exa from "exa-js";
 let exaClient: Exa | null = null;
 
 const getExaClient = () => {
-  if (exaClient) return exaClient;
+  if (exaClient) {
+    console.log("[Exa] Using existing client");
+    return exaClient;
+  }
 
   const apiKey = process.env.EXA_API_KEY;
   if (!apiKey) {
+    console.error("[Exa] EXA_API_KEY not set!");
     throw new Error("EXA_API_KEY environment variable is not set");
   }
+  console.log("[Exa] Creating new client");
   exaClient = new Exa(apiKey);
   return exaClient;
 };
@@ -26,6 +31,8 @@ const errorResponse = (error: unknown) => ({
     })
   }]
 });
+
+console.log("[Exa] Initializing MCP server...");
 
 // Create Exa search tools for deep research
 export const exaSearchTools = createSdkMcpServer({
@@ -48,6 +55,7 @@ export const exaSearchTools = createSdkMcpServer({
         include_text: z.boolean().default(true).describe("Include text snippets in results")
       },
       async (args) => {
+        console.log(`[Exa] search: "${args.query.substring(0, 50)}..."`);
         try {
           const exa = getExaClient();
 
@@ -61,9 +69,10 @@ export const exaSearchTools = createSdkMcpServer({
           if (args.exclude_domains?.length) options.excludeDomains = args.exclude_domains;
           if (args.start_published_date) options.startPublishedDate = args.start_published_date;
           if (args.end_published_date) options.endPublishedDate = args.end_published_date;
-          if (args.include_text) options.contents = { text: { maxCharacters: 2000 } };
+          if (args.include_text) options.contents = { text: { maxCharacters: 1500 } };
 
           const results = await exa.searchAndContents(args.query, options);
+          console.log(`[Exa] search done: ${results.results.length} results`);
 
           return {
             content: [{
@@ -82,7 +91,7 @@ export const exaSearchTools = createSdkMcpServer({
             }]
           };
         } catch (error) {
-          console.error("Exa search error:", error);
+          console.error("[Exa] search FAILED:", error);
           return errorResponse(error);
         }
       }
@@ -97,12 +106,14 @@ export const exaSearchTools = createSdkMcpServer({
         max_characters: z.number().min(500).max(10000).default(3000).describe("Max characters to retrieve per document")
       },
       async (args) => {
+        console.log(`[Exa] get_contents: ${args.urls.length} urls`);
         try {
           const exa = getExaClient();
 
           const contents = await exa.getContents(args.urls, {
             text: { maxCharacters: args.max_characters }
           });
+          console.log(`[Exa] get_contents done: ${contents.results.length} docs`);
 
           return {
             content: [{
@@ -118,7 +129,7 @@ export const exaSearchTools = createSdkMcpServer({
             }]
           };
         } catch (error) {
-          console.error("Exa get_contents error:", error);
+          console.error("[Exa] get_contents FAILED:", error);
           return errorResponse(error);
         }
       }
@@ -134,6 +145,7 @@ export const exaSearchTools = createSdkMcpServer({
         exclude_source_domain: z.boolean().default(true).describe("Exclude results from same domain as source")
       },
       async (args) => {
+        console.log(`[Exa] find_similar: ${args.url.substring(0, 50)}...`);
         try {
           const exa = getExaClient();
 
@@ -141,6 +153,7 @@ export const exaSearchTools = createSdkMcpServer({
             numResults: args.num_results,
             excludeSourceDomain: args.exclude_source_domain
           });
+          console.log(`[Exa] find_similar done: ${results.results.length} results`);
 
           return {
             content: [{
@@ -156,7 +169,7 @@ export const exaSearchTools = createSdkMcpServer({
             }]
           };
         } catch (error) {
-          console.error("Exa find_similar error:", error);
+          console.error("[Exa] find_similar FAILED:", error);
           return errorResponse(error);
         }
       }

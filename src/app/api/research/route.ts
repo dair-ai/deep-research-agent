@@ -14,7 +14,6 @@ function detectStageChange(text: string): { stage: PipelineStage; description: s
   const stagePatterns: { pattern: RegExp; stage: PipelineStage }[] = [
     { pattern: /STAGE:\s*Planner\s*-\s*(.+)/i, stage: "planner" },
     { pattern: /STAGE:\s*WebSearch\s*-\s*(.+)/i, stage: "web-search" },
-    { pattern: /STAGE:\s*Analysis\s*-\s*(.+)/i, stage: "analysis" },
     { pattern: /STAGE:\s*ReportWriter\s*-\s*(.+)/i, stage: "report-writer" }
   ];
 
@@ -108,7 +107,6 @@ async function runResearchWithSandbox(
                   const agentStageMap: Record<string, PipelineStage> = {
                     "planner-agent": "planner",
                     "web-search-agent": "web-search",
-                    "analysis-agent": "analysis",
                     "report-writer-agent": "report-writer"
                   };
                   const stage = agentStageMap[input.subagent_type];
@@ -181,7 +179,6 @@ async function runResearchDirect(
                 const agentStageMap: Record<string, PipelineStage> = {
                   "planner-agent": "planner",
                   "web-search-agent": "web-search",
-                  "analysis-agent": "analysis",
                   "report-writer-agent": "report-writer"
                 };
                 const stage = agentStageMap[input.subagent_type];

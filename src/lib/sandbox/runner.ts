@@ -40,12 +40,11 @@ const EXA_API_KEY = "${exaApiKey}";
 const ORCHESTRATOR_PROMPT = \`You are a Research Orchestrator that coordinates a multi-agent research pipeline.
 
 ## Your Pipeline
-You have 4 specialized subagents to delegate to in sequence:
+You have 3 specialized subagents to delegate to in sequence:
 
 1. **planner-agent**: Creates optimized search queries and date ranges
 2. **web-search-agent**: Gathers sources from the web (has Exa search tools)
-3. **analysis-agent**: Analyzes gathered sources and extracts key findings
-4. **report-writer-agent**: Writes the final comprehensive research report
+3. **report-writer-agent**: Writes the final research report from gathered sources
 
 ## Workflow
 For EVERY research request, follow this exact sequence:
@@ -58,18 +57,36 @@ Call planner-agent with topic and current date.
 Announce: "STAGE: WebSearch - Gathering sources from the web..."
 Call web-search-agent with the search plan.
 
-### Step 3: Analysis
-Announce: "STAGE: Analysis - Analyzing findings and extracting insights..."
-Call analysis-agent with gathered sources.
+### Step 3: Report Writing
+Announce: "STAGE: ReportWriter - Generating report..."
+Call report-writer-agent with the gathered sources.
 
-### Step 4: Report Writing
-Announce: "STAGE: ReportWriter - Generating comprehensive report..."
-Call report-writer-agent with the analysis.
-
-### Step 5: Deliver Report
+### Step 4: Deliver Report
 Return the final markdown report.
 
-ALWAYS use all 4 agents in sequence and announce each STAGE.\`;
+ALWAYS use all 3 agents in sequence and announce each STAGE.\`;
+
+// Subagent definitions
+const SUBAGENTS = {
+  "planner-agent": {
+    description: "Creates 4 search queries with date ranges for a research topic.",
+    tools: [],
+    prompt: "You are a Research Planner. Create exactly 4 search queries for the given topic. Output JSON only with date_range and search_queries (4 queries, 3 results each).",
+    model: "haiku"
+  },
+  "web-search-agent": {
+    description: "Executes search queries and gathers sources using Exa tools.",
+    tools: ["mcp__exa-research__search", "mcp__exa-research__get_contents"],
+    prompt: "Execute the search plan provided. For each query, call the search tool with the date range. After ALL searches complete, pick the 6 best URLs and call get_contents ONCE. Return sources as a simple list with Title, URL, Content. Be fast and efficient.",
+    model: "haiku"
+  },
+  "report-writer-agent": {
+    description: "Writes the final research report from gathered sources.",
+    tools: [],
+    prompt: "You are a Research Report Writer. Create a concise report with 4 sections: Summary (2-3 paragraphs), Key Findings (3-5 paragraphs with citations [1], [2]), Conclusion (1-2 paragraphs), References ([1] Title - URL). Target 800-1200 words. Be concise and direct.",
+    model: "haiku"
+  }
+};
 
 const config = {
   model: "claude-haiku-4-5-20251001",
@@ -84,10 +101,10 @@ const config = {
       }
     }
   },
+  agents: SUBAGENTS,
   allowedTools: [
     "mcp__exa-research__search",
-    "mcp__exa-research__get_contents",
-    "mcp__exa-research__find_similar"
+    "mcp__exa-research__get_contents"
   ],
   disallowedTools: ["WebFetch", "WebSearch"],
   permissionMode: "bypassPermissions"

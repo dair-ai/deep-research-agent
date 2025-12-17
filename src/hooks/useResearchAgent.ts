@@ -158,7 +158,6 @@ export function useResearchAgent() {
                   "orchestrator": "Orchestrator",
                   "planner": "Planner",
                   "web-search": "Web Search",
-                  "analysis": "Analysis",
                   "report-writer": "Report Writer"
                 };
 
