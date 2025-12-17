@@ -167,13 +167,8 @@ export async function* runResearchInSandbox(
 
     yield { type: "status", data: "Sandbox created, setting up project...", timestamp: Date.now() };
 
-    // Create working directory in /tmp (guaranteed to exist)
-    const mkdirResult = await sandbox.runCommand("mkdir", ["-p", "/tmp/research"]);
-    if (mkdirResult.exitCode !== 0) {
-      const mkdirErr = await mkdirResult.stderr();
-      yield { type: "error", data: `Failed to create directory: ${mkdirErr}`, timestamp: Date.now() };
-      return;
-    }
+    // Use default working directory /vercel/sandbox (per docs)
+    const workDir = "/vercel/sandbox";
 
     // Create a working directory with package.json for local npm install
     const packageJson = JSON.stringify({
@@ -193,8 +188,8 @@ export async function* runResearchInSandbox(
 
     try {
       await sandbox.writeFiles([
-        { path: "/tmp/research/package.json", content: Buffer.from(packageJson, "utf-8") },
-        { path: "/tmp/research/index.js", content: Buffer.from(script, "utf-8") }
+        { path: `${workDir}/package.json`, content: Buffer.from(packageJson, "utf-8") },
+        { path: `${workDir}/index.js`, content: Buffer.from(script, "utf-8") }
       ]);
     } catch (writeError) {
       const writeErrMsg = writeError instanceof Error ? writeError.message : String(writeError);
@@ -204,11 +199,11 @@ export async function* runResearchInSandbox(
 
     yield { type: "status", data: "Installing dependencies...", timestamp: Date.now() };
 
-    // Install dependencies locally
+    // Install dependencies locally (per docs example)
     const installResult = await sandbox.runCommand({
       cmd: "npm",
-      args: ["install"],
-      cwd: "/tmp/research",
+      args: ["install", "--loglevel", "info"],
+      cwd: workDir,
       signal: AbortSignal.timeout(ms("2m")),
     });
 
@@ -220,17 +215,17 @@ export async function* runResearchInSandbox(
       return;
     }
 
-    yield { type: "status", data: `Dependencies installed (${installStdout?.split('\n').length || 0} packages), starting research...`, timestamp: Date.now() };
+    yield { type: "status", data: `Dependencies installed, starting research...`, timestamp: Date.now() };
 
-    // Run the research script from /tmp/research where node_modules exists
+    // Run the research script from workDir where node_modules exists
     const command = await sandbox.runCommand({
       cmd: "node",
       args: ["index.js"],
-      cwd: "/tmp/research",
+      cwd: workDir,
       env: {
         ANTHROPIC_API_KEY: anthropicApiKey,
         EXA_API_KEY: exaApiKey,
-        PATH: "/usr/local/bin:/usr/bin:/bin",
+        PATH: "/vercel/runtimes/node22/bin:/usr/local/bin:/usr/bin:/bin",
       },
       detached: true,
     });
