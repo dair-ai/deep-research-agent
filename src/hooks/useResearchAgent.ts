@@ -22,7 +22,7 @@ interface ContentBlock {
 }
 
 interface AgentMessage {
-  type: "user" | "assistant" | "system" | "stage_change";
+  type: "user" | "assistant" | "system" | "stage_change" | "result" | "status" | "error";
   message?: {
     role: string;
     content: ContentBlock[] | string;
@@ -36,6 +36,13 @@ interface AgentMessage {
   stage?: PipelineStage;
   timestamp?: number;
   description?: string;
+  // Result message fields
+  result?: string;
+  duration_ms?: number;
+  num_turns?: number;
+  total_cost_usd?: number;
+  // Status/error fields
+  content?: string;
 }
 
 interface ResearchState {
@@ -125,7 +132,6 @@ export function useResearchAgent() {
             // Handle stage change events
             if (message.type === "stage_change") {
               const stageMsg = message as unknown as StageChangeMessage;
-              console.log(`Pipeline stage change: ${stageMsg.stage}`);
 
               setState(prev => {
                 // Update stages array - mark previous as completed, current as active
@@ -170,6 +176,42 @@ export function useResearchAgent() {
                   }]
                 };
               });
+              continue;
+            }
+
+            // Handle final result message - this contains the report
+            if (message.type === "result" && message.result) {
+              currentReport = message.result;
+              setState(prev => ({
+                ...prev,
+                report: currentReport,
+                sessionId: message.session_id || prev.sessionId
+              }));
+              continue;
+            }
+
+            // Handle status messages (sandbox progress)
+            if (message.type === "status" && message.content) {
+              setState(prev => ({
+                ...prev,
+                steps: [...prev.steps.map(s => ({ ...s, status: "completed" as const })), {
+                  id: `status-${Date.now()}`,
+                  type: "search" as const,
+                  status: "in_progress" as const,
+                  description: message.content!,
+                  timestamp: Date.now()
+                }]
+              }));
+              continue;
+            }
+
+            // Handle error messages
+            if (message.type === "error" && message.content) {
+              setState(prev => ({
+                ...prev,
+                status: "error",
+                error: message.content
+              }));
               continue;
             }
 
