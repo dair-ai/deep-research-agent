@@ -26,12 +26,15 @@ export interface RunResearchOptions {
  * The research script that runs inside the sandbox
  * This gets the agent SDK installed and runs the research pipeline
  */
-function getResearchScript(topic: string, sessionId?: string): string {
+function getResearchScript(topic: string, exaApiKey: string, sessionId?: string): string {
   const escapedTopic = topic.replace(/`/g, "\\`").replace(/\$/g, "\\$").replace(/"/g, '\\"');
   const sessionIdArg = sessionId ? `"${sessionId}"` : "undefined";
 
   return `
 const { query } = require("@anthropic-ai/claude-agent-sdk");
+
+// API key passed from parent environment
+const EXA_API_KEY = "${exaApiKey}";
 
 // Research configuration matching our multi-agent pipeline
 const ORCHESTRATOR_PROMPT = \`You are a Research Orchestrator that coordinates a multi-agent research pipeline.
@@ -77,7 +80,7 @@ const config = {
       command: "npx",
       args: ["-y", "exa-mcp-server"],
       env: {
-        EXA_API_KEY: process.env.EXA_API_KEY
+        EXA_API_KEY: EXA_API_KEY
       }
     }
   },
@@ -182,7 +185,7 @@ export async function* runResearchInSandbox(
     }, null, 2);
 
     // Write package.json and research script
-    const script = getResearchScript(topic, sessionId);
+    const script = getResearchScript(topic, exaApiKey, sessionId);
 
     yield { type: "status", data: "Writing project files...", timestamp: Date.now() };
 
