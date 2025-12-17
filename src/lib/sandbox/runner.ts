@@ -150,8 +150,10 @@ export async function* runResearchInSandbox(
     };
 
     // Add credentials if available (for explicit auth)
-    if (process.env.VERCEL_API_TOKEN) {
-      sandboxParams.token = process.env.VERCEL_API_TOKEN;
+    // Support both VERCEL_TOKEN (official) and VERCEL_API_TOKEN (legacy)
+    const token = process.env.VERCEL_TOKEN || process.env.VERCEL_API_TOKEN;
+    if (token) {
+      sandboxParams.token = token;
     }
     if (process.env.VERCEL_PROJECT_ID) {
       sandboxParams.projectId = process.env.VERCEL_PROJECT_ID;
@@ -163,10 +165,33 @@ export async function* runResearchInSandbox(
     // Create sandbox with Node.js runtime
     sandbox = await Sandbox.create(sandboxParams);
 
-    yield { type: "status", data: "Sandbox created, installing dependencies...", timestamp: Date.now() };
+    yield { type: "status", data: "Sandbox created, setting up project...", timestamp: Date.now() };
 
-    // Install Claude Code CLI and agent SDK
-    const installResult = await sandbox.runCommand("npm", ["install", "-g", "@anthropic-ai/claude-code", "@anthropic-ai/claude-agent-sdk", "exa-mcp-server"], {
+    // Create a working directory with package.json for local npm install
+    const packageJson = JSON.stringify({
+      name: "research-runner",
+      version: "1.0.0",
+      type: "commonjs",
+      dependencies: {
+        "@anthropic-ai/claude-agent-sdk": "latest",
+        "exa-mcp-server": "latest"
+      }
+    }, null, 2);
+
+    // Write package.json and research script
+    const script = getResearchScript(topic, sessionId);
+    await sandbox.writeFiles([
+      { path: "/app/package.json", content: Buffer.from(packageJson, "utf-8") },
+      { path: "/app/research.js", content: Buffer.from(script, "utf-8") }
+    ]);
+
+    yield { type: "status", data: "Installing dependencies...", timestamp: Date.now() };
+
+    // Install dependencies locally in /app
+    const installResult = await sandbox.runCommand({
+      cmd: "npm",
+      args: ["install"],
+      cwd: "/app",
       signal: AbortSignal.timeout(ms("2m")),
     });
 
@@ -180,20 +205,15 @@ export async function* runResearchInSandbox(
 
     yield { type: "status", data: "Dependencies installed, starting research...", timestamp: Date.now() };
 
-    // Write research script to sandbox
-    const script = getResearchScript(topic, sessionId);
-    await sandbox.writeFiles([
-      { path: "/tmp/research.js", content: Buffer.from(script, "utf-8") }
-    ]);
-
-    // Run the research script in detached mode to stream output
+    // Run the research script from /app where node_modules exists
     const command = await sandbox.runCommand({
       cmd: "node",
-      args: ["/tmp/research.js"],
+      args: ["research.js"],
+      cwd: "/app",
       env: {
         ANTHROPIC_API_KEY: anthropicApiKey,
         EXA_API_KEY: exaApiKey,
-        PATH: "/usr/local/bin:/usr/bin:/bin:/root/.npm-global/bin",
+        PATH: "/usr/local/bin:/usr/bin:/bin",
       },
       detached: true,
     });
