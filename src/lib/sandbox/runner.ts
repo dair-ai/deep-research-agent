@@ -168,7 +168,12 @@ export async function* runResearchInSandbox(
     yield { type: "status", data: "Sandbox created, setting up project...", timestamp: Date.now() };
 
     // Create working directory in /tmp (guaranteed to exist)
-    await sandbox.runCommand("mkdir", ["-p", "/tmp/research"]);
+    const mkdirResult = await sandbox.runCommand("mkdir", ["-p", "/tmp/research"]);
+    if (mkdirResult.exitCode !== 0) {
+      const mkdirErr = await mkdirResult.stderr();
+      yield { type: "error", data: `Failed to create directory: ${mkdirErr}`, timestamp: Date.now() };
+      return;
+    }
 
     // Create a working directory with package.json for local npm install
     const packageJson = JSON.stringify({
@@ -183,10 +188,19 @@ export async function* runResearchInSandbox(
 
     // Write package.json and research script
     const script = getResearchScript(topic, sessionId);
-    await sandbox.writeFiles([
-      { path: "/tmp/research/package.json", content: Buffer.from(packageJson, "utf-8") },
-      { path: "/tmp/research/index.js", content: Buffer.from(script, "utf-8") }
-    ]);
+
+    yield { type: "status", data: "Writing project files...", timestamp: Date.now() };
+
+    try {
+      await sandbox.writeFiles([
+        { path: "/tmp/research/package.json", content: Buffer.from(packageJson, "utf-8") },
+        { path: "/tmp/research/index.js", content: Buffer.from(script, "utf-8") }
+      ]);
+    } catch (writeError) {
+      const writeErrMsg = writeError instanceof Error ? writeError.message : String(writeError);
+      yield { type: "error", data: `Failed to write files: ${writeErrMsg}`, timestamp: Date.now() };
+      return;
+    }
 
     yield { type: "status", data: "Installing dependencies...", timestamp: Date.now() };
 
@@ -202,11 +216,11 @@ export async function* runResearchInSandbox(
     const installStderr = await installResult.stderr();
 
     if (installResult.exitCode !== 0) {
-      yield { type: "error", data: `Failed to install dependencies (exit ${installResult.exitCode}): ${installStderr || installStdout}`, timestamp: Date.now() };
+      yield { type: "error", data: `npm install failed (exit ${installResult.exitCode}): ${installStderr || installStdout}`, timestamp: Date.now() };
       return;
     }
 
-    yield { type: "status", data: "Dependencies installed, starting research...", timestamp: Date.now() };
+    yield { type: "status", data: `Dependencies installed (${installStdout?.split('\n').length || 0} packages), starting research...`, timestamp: Date.now() };
 
     // Run the research script from /tmp/research where node_modules exists
     const command = await sandbox.runCommand({
