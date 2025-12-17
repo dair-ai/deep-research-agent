@@ -150,8 +150,11 @@ export async function* runResearchInSandbox(
       signal: AbortSignal.timeout(ms("2m")),
     });
 
+    const installStdout = await installResult.stdout();
+    const installStderr = await installResult.stderr();
+
     if (installResult.exitCode !== 0) {
-      yield { type: "error", data: `Failed to install dependencies: ${installResult.stderr}`, timestamp: Date.now() };
+      yield { type: "error", data: `Failed to install dependencies (exit ${installResult.exitCode}): ${installStderr || installStdout}`, timestamp: Date.now() };
       return;
     }
 
@@ -170,6 +173,7 @@ export async function* runResearchInSandbox(
       env: {
         ANTHROPIC_API_KEY: anthropicApiKey,
         EXA_API_KEY: exaApiKey,
+        PATH: "/usr/local/bin:/usr/bin:/bin:/root/.npm-global/bin",
       },
       detached: true,
     });
@@ -219,15 +223,20 @@ export async function* runResearchInSandbox(
       }
     }
 
-    // Process stderr if any
+    // Process stderr if any - this often contains the actual error
     const stderr = await command.stderr();
     if (stderr) {
       const stderrMsg: SandboxMessage = { type: "stderr", data: stderr, timestamp: Date.now() };
       onMessage?.(stderrMsg);
+      // Also yield stderr as error for visibility
+      if (finished.exitCode !== 0) {
+        yield { type: "error", data: `Script stderr: ${stderr}`, timestamp: Date.now() };
+      }
     }
 
     if (finished.exitCode !== 0) {
-      yield { type: "error", data: `Research script failed with exit code ${finished.exitCode}`, timestamp: Date.now() };
+      const errorDetails = stderr || stdout || "No output captured";
+      yield { type: "error", data: `Research script failed (exit ${finished.exitCode}): ${errorDetails}`, timestamp: Date.now() };
     }
 
     yield { type: "status", data: "Sandbox cleanup complete", timestamp: Date.now() };
