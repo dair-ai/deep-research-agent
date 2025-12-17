@@ -167,6 +167,9 @@ export async function* runResearchInSandbox(
 
     yield { type: "status", data: "Sandbox created, setting up project...", timestamp: Date.now() };
 
+    // Create working directory in /tmp (guaranteed to exist)
+    await sandbox.runCommand("mkdir", ["-p", "/tmp/research"]);
+
     // Create a working directory with package.json for local npm install
     const packageJson = JSON.stringify({
       name: "research-runner",
@@ -181,17 +184,17 @@ export async function* runResearchInSandbox(
     // Write package.json and research script
     const script = getResearchScript(topic, sessionId);
     await sandbox.writeFiles([
-      { path: "/app/package.json", content: Buffer.from(packageJson, "utf-8") },
-      { path: "/app/research.js", content: Buffer.from(script, "utf-8") }
+      { path: "/tmp/research/package.json", content: Buffer.from(packageJson, "utf-8") },
+      { path: "/tmp/research/index.js", content: Buffer.from(script, "utf-8") }
     ]);
 
     yield { type: "status", data: "Installing dependencies...", timestamp: Date.now() };
 
-    // Install dependencies locally in /app
+    // Install dependencies locally
     const installResult = await sandbox.runCommand({
       cmd: "npm",
       args: ["install"],
-      cwd: "/app",
+      cwd: "/tmp/research",
       signal: AbortSignal.timeout(ms("2m")),
     });
 
@@ -205,11 +208,11 @@ export async function* runResearchInSandbox(
 
     yield { type: "status", data: "Dependencies installed, starting research...", timestamp: Date.now() };
 
-    // Run the research script from /app where node_modules exists
+    // Run the research script from /tmp/research where node_modules exists
     const command = await sandbox.runCommand({
       cmd: "node",
-      args: ["research.js"],
-      cwd: "/app",
+      args: ["index.js"],
+      cwd: "/tmp/research",
       env: {
         ANTHROPIC_API_KEY: anthropicApiKey,
         EXA_API_KEY: exaApiKey,
