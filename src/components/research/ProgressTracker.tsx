@@ -3,15 +3,61 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { ResearchStep } from "@/types/research";
+import type { ResearchStep, StageProgress, PipelineStage } from "@/types/research";
 
 interface ProgressTrackerProps {
   steps: ResearchStep[];
+  stages: StageProgress[];
+  currentStage: PipelineStage | null;
   status: "idle" | "researching" | "completed" | "error";
 }
 
-export function ProgressTracker({ steps, status }: ProgressTrackerProps) {
-  if (steps.length === 0) return null;
+const STAGE_CONFIG: { stage: PipelineStage; label: string; icon: React.ReactNode }[] = [
+  {
+    stage: "planner",
+    label: "Planner",
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+      </svg>
+    )
+  },
+  {
+    stage: "web-search",
+    label: "Search",
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+    )
+  },
+  {
+    stage: "analysis",
+    label: "Analysis",
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      </svg>
+    )
+  },
+  {
+    stage: "report-writer",
+    label: "Report",
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    )
+  }
+];
+
+export function ProgressTracker({ steps, stages, currentStage, status }: ProgressTrackerProps) {
+  if (steps.length === 0 && stages.every(s => s.status === "pending")) return null;
+
+  const getStageStatus = (stage: PipelineStage): StageProgress["status"] => {
+    const stageProgress = stages.find(s => s.stage === stage);
+    return stageProgress?.status || "pending";
+  };
 
   const getStatusIcon = (stepStatus: ResearchStep["status"]) => {
     switch (stepStatus) {
@@ -88,6 +134,61 @@ export function ProgressTracker({ steps, status }: ProgressTrackerProps) {
         </CardTitle>
       </CardHeader>
       <CardContent>
+        {/* Pipeline Stage Indicator */}
+        <div className="mb-4 pb-4 border-b">
+          <div className="flex items-center justify-between">
+            {STAGE_CONFIG.map((config, index) => {
+              const stageStatus = getStageStatus(config.stage);
+              const isActive = stageStatus === "active";
+              const isCompleted = stageStatus === "completed";
+
+              return (
+                <div key={config.stage} className="flex items-center flex-1">
+                  {/* Stage Node */}
+                  <div className="flex flex-col items-center flex-1">
+                    <div
+                      className={`
+                        w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300
+                        ${isCompleted
+                          ? "bg-green-500 text-white"
+                          : isActive
+                            ? "bg-blue-500 text-white ring-4 ring-blue-200 dark:ring-blue-900"
+                            : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+                        }
+                        ${isActive ? "animate-pulse" : ""}
+                      `}
+                    >
+                      {isCompleted ? (
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      ) : (
+                        config.icon
+                      )}
+                    </div>
+                    <span className={`
+                      mt-2 text-xs font-medium transition-colors
+                      ${isActive ? "text-blue-600 dark:text-blue-400" : ""}
+                      ${isCompleted ? "text-green-600 dark:text-green-400" : ""}
+                      ${!isActive && !isCompleted ? "text-gray-500 dark:text-gray-400" : ""}
+                    `}>
+                      {config.label}
+                    </span>
+                  </div>
+
+                  {/* Connector Line */}
+                  {index < STAGE_CONFIG.length - 1 && (
+                    <div className={`
+                      h-0.5 flex-1 mx-2 transition-colors duration-300
+                      ${isCompleted ? "bg-green-500" : "bg-gray-200 dark:bg-gray-700"}
+                    `} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         <ScrollArea className="h-[200px] pr-4">
           <div className="space-y-3">
             {steps.map((step, index) => (

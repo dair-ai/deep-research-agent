@@ -1,7 +1,14 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import type { ResearchSource, ResearchStep } from "@/types/research";
+import type {
+  ResearchSource,
+  ResearchStep,
+  PipelineStage,
+  StageProgress,
+  StageChangeMessage
+} from "@/types/research";
+import { createInitialStages } from "@/types/research";
 
 // Claude Agent SDK message format
 interface ContentBlock {
@@ -15,7 +22,7 @@ interface ContentBlock {
 }
 
 interface AgentMessage {
-  type: "user" | "assistant" | "system";
+  type: "user" | "assistant" | "system" | "stage_change";
   message?: {
     role: string;
     content: ContentBlock[] | string;
@@ -25,10 +32,16 @@ interface AgentMessage {
   tool_use_result?: string;
   parent_tool_use_id?: string | null;
   subtype?: string;
+  // Stage change fields
+  stage?: PipelineStage;
+  timestamp?: number;
+  description?: string;
 }
 
 interface ResearchState {
   status: "idle" | "researching" | "completed" | "error";
+  currentStage: PipelineStage | null;
+  stages: StageProgress[];
   steps: ResearchStep[];
   sources: ResearchSource[];
   report: string;
@@ -39,6 +52,8 @@ interface ResearchState {
 export function useResearchAgent() {
   const [state, setState] = useState<ResearchState>({
     status: "idle",
+    currentStage: null,
+    stages: createInitialStages(),
     steps: [],
     sources: [],
     report: ""
@@ -54,11 +69,13 @@ export function useResearchAgent() {
 
     setState({
       status: "researching",
+      currentStage: null,
+      stages: createInitialStages(),
       steps: [{
         id: "init",
         type: "search",
         status: "in_progress",
-        description: "Starting deep research...",
+        description: "Starting multi-agent research pipeline...",
         timestamp: Date.now()
       }],
       sources: [],
@@ -105,6 +122,57 @@ export function useResearchAgent() {
             const message = JSON.parse(data) as AgentMessage;
             console.log("Agent message:", message);
 
+            // Handle stage change events
+            if (message.type === "stage_change") {
+              const stageMsg = message as unknown as StageChangeMessage;
+              console.log(`Pipeline stage change: ${stageMsg.stage}`);
+
+              setState(prev => {
+                // Update stages array - mark previous as completed, current as active
+                const updatedStages = prev.stages.map(s => {
+                  if (s.stage === stageMsg.stage) {
+                    return {
+                      ...s,
+                      status: "active" as const,
+                      startTime: stageMsg.timestamp,
+                      description: stageMsg.description
+                    };
+                  } else if (s.status === "active") {
+                    return {
+                      ...s,
+                      status: "completed" as const,
+                      endTime: stageMsg.timestamp
+                    };
+                  }
+                  return s;
+                });
+
+                // Add a step for the stage transition
+                const stageLabels: Record<PipelineStage, string> = {
+                  "orchestrator": "Orchestrator",
+                  "planner": "Planner",
+                  "web-search": "Web Search",
+                  "analysis": "Analysis",
+                  "report-writer": "Report Writer"
+                };
+
+                return {
+                  ...prev,
+                  currentStage: stageMsg.stage,
+                  stages: updatedStages,
+                  steps: [...prev.steps.map(s => ({ ...s, status: "completed" as const })), {
+                    id: `stage-${stageMsg.stage}-${Date.now()}`,
+                    type: "search" as const,
+                    status: "in_progress" as const,
+                    description: `${stageLabels[stageMsg.stage]}: ${stageMsg.description || "Processing..."}`,
+                    timestamp: stageMsg.timestamp,
+                    stage: stageMsg.stage
+                  }]
+                };
+              });
+              continue;
+            }
+
             // Capture session ID
             if (message.session_id && !state.sessionId) {
               setState(prev => ({ ...prev, sessionId: message.session_id }));
@@ -133,6 +201,10 @@ export function useResearchAgent() {
                   stepDescription = `Reading content from sources...`;
                 } else if (block.name.includes("find_similar")) {
                   stepDescription = `Finding similar sources...`;
+                } else if (block.name === "Task") {
+                  // Subagent invocation
+                  const input = toolInput as { subagent_type?: string; description?: string };
+                  stepDescription = `Delegating to ${input.subagent_type || "subagent"}...`;
                 } else {
                   stepDescription = `Using tool: ${block.name}`;
                 }
@@ -144,7 +216,8 @@ export function useResearchAgent() {
                     type: "search" as const,
                     status: "in_progress" as const,
                     description: stepDescription,
-                    timestamp: Date.now()
+                    timestamp: Date.now(),
+                    stage: prev.currentStage || undefined
                   }]
                 }));
               }
@@ -193,9 +266,16 @@ export function useResearchAgent() {
         }
       }
 
+      // Mark all stages as completed
       setState(prev => ({
         ...prev,
         status: "completed",
+        currentStage: null,
+        stages: prev.stages.map(s => ({
+          ...s,
+          status: "completed" as const,
+          endTime: s.endTime || Date.now()
+        })),
         steps: [...prev.steps.map(s => ({ ...s, status: "completed" as const })), {
           id: "complete",
           type: "complete" as const,
@@ -232,6 +312,8 @@ export function useResearchAgent() {
     }
     setState({
       status: "idle",
+      currentStage: null,
+      stages: createInitialStages(),
       steps: [],
       sources: [],
       report: ""

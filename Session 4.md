@@ -1,5 +1,6 @@
 ## Session 4 - Iterating and Deploying the App
 
+Fork our project: https://github.com/dair-ai/deep-research-agent.git
 
 Goals:
 - Covert agent to multi-agent system
@@ -8,7 +9,7 @@ Goals:
 - Advanced workflows
     - Git Worktrees - Work on multiple features in parallel - scaling efforts with git worktrees
 - Deploying the app
-    - Option 1 () - GitHub -> Connect in Vercel
+    - Option 1 (recommended) - GitHub -> Connect in Vercel
     - Option 2 - Vercel-cli deployment
 
 ## Part 1 - Advanced workflows

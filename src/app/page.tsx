@@ -11,6 +11,8 @@ import {
 export default function Home() {
   const {
     status,
+    stages,
+    currentStage,
     steps,
     sources,
     report,
@@ -43,8 +45,13 @@ export default function Home() {
               onCancel={cancelResearch}
             />
 
-            {steps.length > 0 && (
-              <ProgressTracker steps={steps} status={status} />
+            {(status === "researching" || steps.length > 0) && (
+              <ProgressTracker
+                steps={steps}
+                stages={stages}
+                currentStage={currentStage}
+                status={status}
+              />
             )}
 
             {sources.length > 0 && (

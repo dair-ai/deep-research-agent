@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deep Research Agent - Architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0e14;
+      --bg-secondary: #0d1117;
+      --bg-card: #161b22;
+      --border: #30363d;
+      --text-primary: #e6edf3;
+      --text-secondary: #8b949e;
+      --text-muted: #484f58;
+
+      /* Stage colors */
+      --orchestrator: #f97316;
+      --web-search: #3b82f6;
+      --analysis: #8b5cf6;
+      --report-writer: #10b981;
+
+      /* Accents */
+      --cyan: #22d3ee;
+      --glow: rgba(34, 211, 238, 0.15);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Space Grotesk', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Grid background */
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(34, 211, 238, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(34, 211, 238, 0.03) 1px, transparent 1px);
+      background-size: 50px 50px;
+      pointer-events: none;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 3rem 2rem;
+      position: relative;
+    }
+
+    /* Header */
+    header {
+      text-align: center;
+      margin-bottom: 4rem;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(135deg, var(--cyan), var(--web-search));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      letter-spacing: 0.05em;
+    }
+
+    /* Section titles */
+    .section-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--cyan);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, var(--border), transparent);
+    }
+
+    /* Architecture Flow */
+    .architecture {
+      margin-bottom: 5rem;
+    }
+
+    .flow-container {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      position: relative;
+      padding: 2rem 0;
+    }
+
+    /* User Input Node */
+    .user-input {
+      flex-shrink: 0;
+      width: 180px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .user-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: var(--bg-card);
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .user-icon svg {
+      width: 28px;
+      height: 28px;
+      stroke: var(--text-secondary);
+    }
+
+    .user-icon::after {
+      content: '';
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      border: 1px dashed var(--border);
+      animation: spin 20s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .input-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      text-align: center;
+    }
+
+    .query-example {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      max-width: 160px;
+      text-align: center;
+    }
+
+    /* Flow Arrow */
+    .flow-arrow {
+      width: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .arrow-line {
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, var(--border), var(--cyan));
+      position: relative;
+    }
+
+    .arrow-line::after {
+      content: '';
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      border: 6px solid transparent;
+      border-left-color: var(--cyan);
+    }
+
+    .data-packet {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      background: var(--cyan);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--cyan);
+      animation: flowRight 2s ease-in-out infinite;
+    }
+
+    @keyframes flowRight {
+      0%, 100% { left: 0; opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { left: calc(100% - 8px); opacity: 0; }
+    }
+
+    /* Pipeline Container */
+    .pipeline {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .pipeline::before {
+      content: 'MULTI-AGENT PIPELINE';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%) translateY(-50%);
+      background: var(--bg-primary);
+      padding: 0.25rem 1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.65rem;
+      font-weight: 600;
+      color: var(--cyan);
+      letter-spacing: 0.1em;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+    }
+
+    /* Orchestrator */
+    .orchestrator {
+      background: linear-gradient(135deg, rgba(249, 115, 22, 0.1), transparent);
+      border: 1px solid rgba(249, 115, 22, 0.3);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .orchestrator-icon {
+      width: 48px;
+      height: 48px;
+      background: rgba(249, 115, 22, 0.15);
+      border: 1px solid var(--orchestrator);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .orchestrator-icon svg {
+      width: 24px;
+      height: 24px;
+      stroke: var(--orchestrator);
+    }
+
+    .orchestrator-info h3 {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--orchestrator);
+      margin-bottom: 0.25rem;
+    }
+
+    .orchestrator-info p {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    /* Subagents Row */
+    .subagents {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-top: 0.5rem;
+    }
+
+    .subagent {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      position: relative;
+      transition: all 0.3s ease;
+    }
+
+    .subagent:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .subagent::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 1.5rem;
+      right: 1.5rem;
+      height: 3px;
+      border-radius: 0 0 4px 4px;
+    }
+
+    .subagent.web-search::before { background: var(--web-search); }
+    .subagent.analysis::before { background: var(--analysis); }
+    .subagent.report-writer::before { background: var(--report-writer); }
+
+    .subagent-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .subagent-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .web-search .subagent-icon {
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid var(--web-search);
+    }
+    .web-search .subagent-icon svg { stroke: var(--web-search); }
+
+    .analysis .subagent-icon {
+      background: rgba(139, 92, 246, 0.15);
+      border: 1px solid var(--analysis);
+    }
+    .analysis .subagent-icon svg { stroke: var(--analysis); }
+
+    .report-writer .subagent-icon {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid var(--report-writer);
+    }
+    .report-writer .subagent-icon svg { stroke: var(--report-writer); }
+
+    .subagent-icon svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .subagent-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .web-search .subagent-title { color: var(--web-search); }
+    .analysis .subagent-title { color: var(--analysis); }
+    .report-writer .subagent-title { color: var(--report-writer); }
+
+    .subagent-step {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.6rem;
+      color: var(--text-muted);
+      background: var(--bg-secondary);
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+    }
+
+    .subagent-desc {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-bottom: 1rem;
+    }
+
+    .tools-section h4 {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.5rem;
+    }
+
+    .tool-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.375rem;
+    }
+
+    .tool-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.65rem;
+      padding: 0.25rem 0.5rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-secondary);
+    }
+
+    .no-tools {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    /* Flow connectors between subagents */
+    .subagent-connector {
+      position: absolute;
+      top: 50%;
+      right: -1rem;
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+    }
+
+    .connector-line {
+      width: 1rem;
+      height: 2px;
+      background: var(--border);
+    }
+
+    .connector-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--cyan);
+      border-radius: 50%;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.3; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.2); }
+    }
+
+    /* Output Node */
+    .output {
+      flex-shrink: 0;
+      width: 180px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .output-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.05));
+      border: 2px solid var(--report-writer);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .output-icon svg {
+      width: 28px;
+      height: 28px;
+      stroke: var(--report-writer);
+    }
+
+    .output-icon::after {
+      content: '';
+      position: absolute;
+      inset: -8px;
+      border-radius: 16px;
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      animation: pulse-ring 2s ease-out infinite;
+    }
+
+    @keyframes pulse-ring {
+      0% { transform: scale(1); opacity: 1; }
+      100% { transform: scale(1.2); opacity: 0; }
+    }
+
+    .output-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--report-writer);
+      text-align: center;
+      font-weight: 600;
+    }
+
+    .output-details {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    .output-details span {
+      display: block;
+      color: var(--text-secondary);
+      margin-top: 0.25rem;
+    }
+
+    /* Data Flow Section */
+    .data-flow {
+      margin-bottom: 4rem;
+    }
+
+    .flow-diagram {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+    }
+
+    .flow-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .flow-step {
+      display: grid;
+      grid-template-columns: 120px 1fr 200px;
+      gap: 1.5rem;
+      align-items: start;
+      padding: 1.5rem 0;
+      border-bottom: 1px dashed var(--border);
+      position: relative;
+    }
+
+    .flow-step:last-child {
+      border-bottom: none;
+    }
+
+    .step-number {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .step-badge {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+
+    .step-1 .step-badge { background: rgba(249, 115, 22, 0.15); color: var(--orchestrator); border: 1px solid var(--orchestrator); }
+    .step-2 .step-badge { background: rgba(59, 130, 246, 0.15); color: var(--web-search); border: 1px solid var(--web-search); }
+    .step-3 .step-badge { background: rgba(139, 92, 246, 0.15); color: var(--analysis); border: 1px solid var(--analysis); }
+    .step-4 .step-badge { background: rgba(16, 185, 129, 0.15); color: var(--report-writer); border: 1px solid var(--report-writer); }
+
+    .step-agent {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+    }
+
+    .step-content h4 {
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .step-1 h4 { color: var(--orchestrator); }
+    .step-2 h4 { color: var(--web-search); }
+    .step-3 h4 { color: var(--analysis); }
+    .step-4 h4 { color: var(--report-writer); }
+
+    .step-content p {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    .step-data {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+
+    .step-data h5 {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.5rem;
+    }
+
+    .data-structure {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--cyan);
+      line-height: 1.6;
+    }
+
+    .data-structure .key { color: var(--text-secondary); }
+    .data-structure .string { color: #a5d6ff; }
+    .data-structure .array { color: #7ee787; }
+
+    /* Tech Stack */
+    .tech-stack {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+    }
+
+    .tech-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+
+    .tech-item:hover {
+      border-color: var(--cyan);
+      transform: translateY(-2px);
+    }
+
+    .tech-item h4 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 0.375rem;
+    }
+
+    .tech-item p {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding-top: 2rem;
+      border-top: 1px solid var(--border);
+    }
+
+    footer p {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    footer a {
+      color: var(--cyan);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* Responsive */
+    @media (max-width: 1200px) {
+      .flow-container {
+        flex-direction: column;
+        gap: 1.5rem;
+      }
+
+      .user-input, .output {
+        width: 100%;
+        flex-direction: row;
+        justify-content: center;
+      }
+
+      .flow-arrow {
+        width: 100%;
+        height: 40px;
+        transform: rotate(90deg);
+      }
+
+      .subagents {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="grid-bg"></div>
+
+  <div class="container">
+    <header>
+      <h1>Deep Research Agent</h1>
+      <p class="subtitle">4-Stage Multi-Agent Pipeline Architecture</p>
+    </header>
+
+    <!-- Architecture Overview -->
+    <section class="architecture">
+      <div class="section-title">System Architecture</div>
+
+      <div class="flow-container">
+        <!-- User Input -->
+        <div class="user-input">
+          <div class="user-icon">
+            <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+            </svg>
+          </div>
+          <div class="input-label">User Query</div>
+          <div class="query-example">"Latest advances in quantum computing"</div>
+        </div>
+
+        <!-- Arrow -->
+        <div class="flow-arrow">
+          <div class="arrow-line">
+            <div class="data-packet"></div>
+          </div>
+        </div>
+
+        <!-- Pipeline -->
+        <div class="pipeline">
+          <!-- Orchestrator -->
+          <div class="orchestrator">
+            <div class="orchestrator-icon">
+              <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+              </svg>
+            </div>
+            <div class="orchestrator-info">
+              <h3>Orchestrator Agent</h3>
+              <p>Coordinates the sequential pipeline, routing queries through each specialized subagent and managing data flow between stages.</p>
+            </div>
+          </div>
+
+          <!-- Subagents -->
+          <div class="subagents" style="grid-template-columns: repeat(4, 1fr);">
+            <div class="subagent planner" style="--stage-color: #eab308;">
+              <div class="subagent-header">
+                <div class="subagent-icon" style="background: rgba(234, 179, 8, 0.15); border-color: #eab308;">
+                  <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5" style="stroke: #eab308;">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                </div>
+                <div>
+                  <div class="subagent-title" style="color: #eab308;">Planner Agent</div>
+                  <span class="subagent-step">STEP 1</span>
+                </div>
+              </div>
+              <p class="subagent-desc">Analyzes topic and creates 5-10 optimized search queries with date ranges.</p>
+              <div class="tools-section">
+                <h4>Tools</h4>
+                <p class="no-tools">Planning only (no tools)</p>
+              </div>
+            </div>
+
+            <div class="subagent web-search">
+              <div class="subagent-header">
+                <div class="subagent-icon">
+                  <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                  </svg>
+                </div>
+                <div>
+                  <div class="subagent-title">Web Search Agent</div>
+                  <span class="subagent-step">STEP 2</span>
+                </div>
+              </div>
+              <p class="subagent-desc">Executes search plan with date filters, gathers 10-15 sources using Exa.</p>
+              <div class="tools-section">
+                <h4>Tools</h4>
+                <div class="tool-list">
+                  <span class="tool-tag">exa.search</span>
+                  <span class="tool-tag">exa.get_contents</span>
+                  <span class="tool-tag">exa.find_similar</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="subagent analysis">
+              <div class="subagent-header">
+                <div class="subagent-icon">
+                  <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+                  </svg>
+                </div>
+                <div>
+                  <div class="subagent-title">Analysis Agent</div>
+                  <span class="subagent-step">STEP 3</span>
+                </div>
+              </div>
+              <p class="subagent-desc">Identifies themes, extracts key findings, and structures insights from gathered sources.</p>
+              <div class="tools-section">
+                <h4>Tools</h4>
+                <p class="no-tools">Text processing only (no tools)</p>
+              </div>
+            </div>
+
+            <div class="subagent report-writer">
+              <div class="subagent-header">
+                <div class="subagent-icon">
+                  <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                  </svg>
+                </div>
+                <div>
+                  <div class="subagent-title">Report Writer Agent</div>
+                  <span class="subagent-step">STEP 4</span>
+                </div>
+              </div>
+              <p class="subagent-desc">Transforms analyzed findings into a comprehensive, well-structured markdown report.</p>
+              <div class="tools-section">
+                <h4>Tools</h4>
+                <p class="no-tools">Text generation only (no tools)</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Arrow -->
+        <div class="flow-arrow">
+          <div class="arrow-line">
+            <div class="data-packet" style="animation-delay: 1s;"></div>
+          </div>
+        </div>
+
+        <!-- Output -->
+        <div class="output">
+          <div class="output-icon">
+            <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div class="output-label">Research Report</div>
+          <div class="output-details">
+            Markdown with TOC, Executive Summary, Findings & Sources
+            <span>2000-4000 words</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Data Flow -->
+    <section class="data-flow">
+      <div class="section-title">Data Flow Between Stages</div>
+
+      <div class="flow-diagram">
+        <div class="flow-steps">
+          <div class="flow-step step-1">
+            <div class="step-number">
+              <div class="step-badge">1</div>
+              <span class="step-agent">Planner</span>
+            </div>
+            <div class="step-content">
+              <h4>Analyze Topic & Create Search Plan</h4>
+              <p>Analyzes the research topic with current date/time, determines appropriate date ranges, and generates 5-10 optimized search queries.</p>
+            </div>
+            <div class="step-data">
+              <h5>Output Data</h5>
+              <div class="data-structure">
+                {<br>
+                &nbsp;&nbsp;<span class="key">date_range:</span> {<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;start: <span class="string">"2024-06-01"</span>,<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;end: <span class="string">"2024-12-17"</span><br>
+                &nbsp;&nbsp;},<br>
+                &nbsp;&nbsp;<span class="key">queries:</span> <span class="array">[5-10]</span><br>
+                }
+              </div>
+            </div>
+          </div>
+
+          <div class="flow-step step-2">
+            <div class="step-number">
+              <div class="step-badge">2</div>
+              <span class="step-agent">WebSearch</span>
+            </div>
+            <div class="step-content">
+              <h4>Execute Search Plan</h4>
+              <p>Runs all planned queries with date filters (start_published_date, end_published_date), retrieves full content, and finds similar articles.</p>
+            </div>
+            <div class="step-data">
+              <h5>Output Data</h5>
+              <div class="data-structure">
+                {<br>
+                &nbsp;&nbsp;<span class="key">sources:</span> <span class="array">[</span><br>
+                &nbsp;&nbsp;&nbsp;&nbsp;{ title, url, author,<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;content, date }<br>
+                &nbsp;&nbsp;<span class="array">] // 10-15 items</span><br>
+                }
+              </div>
+            </div>
+          </div>
+
+          <div class="flow-step step-3">
+            <div class="step-number">
+              <div class="step-badge">3</div>
+              <span class="step-agent">Analysis</span>
+            </div>
+            <div class="step-content">
+              <h4>Analyze & Structure</h4>
+              <p>Identifies major themes, extracts key findings with citations, notes contradictions between sources, and assesses overall quality and gaps.</p>
+            </div>
+            <div class="step-data">
+              <h5>Output Data</h5>
+              <div class="data-structure">
+                {<br>
+                &nbsp;&nbsp;<span class="key">themes:</span> <span class="array">[...]</span>,<br>
+                &nbsp;&nbsp;<span class="key">findings:</span> <span class="array">[...]</span>,<br>
+                &nbsp;&nbsp;<span class="key">statistics:</span> <span class="array">[...]</span>,<br>
+                &nbsp;&nbsp;<span class="key">gaps:</span> <span class="array">[...]</span><br>
+                }
+              </div>
+            </div>
+          </div>
+
+          <div class="flow-step step-4">
+            <div class="step-number">
+              <div class="step-badge">4</div>
+              <span class="step-agent">ReportWriter</span>
+            </div>
+            <div class="step-content">
+              <h4>Generate Report</h4>
+              <p>Transforms structured analysis into a polished markdown report with table of contents, executive summary, themed sections, and properly cited sources.</p>
+            </div>
+            <div class="step-data">
+              <h5>Output Data</h5>
+              <div class="data-structure">
+                <span class="string">## Table of Contents</span><br>
+                <span class="string">## Executive Summary</span><br>
+                <span class="string">## Key Findings</span><br>
+                <span class="string">## Analysis</span><br>
+                <span class="string">## Sources</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tech Stack -->
+    <section class="tech">
+      <div class="section-title">Technology Stack</div>
+
+      <div class="tech-stack">
+        <div class="tech-item">
+          <h4>Claude Agent SDK</h4>
+          <p>Multi-agent orchestration</p>
+        </div>
+        <div class="tech-item">
+          <h4>Claude Haiku</h4>
+          <p>All agents (speed + cost)</p>
+        </div>
+        <div class="tech-item">
+          <h4>Exa API</h4>
+          <p>Neural web search</p>
+        </div>
+        <div class="tech-item">
+          <h4>Next.js + SSE</h4>
+          <p>Real-time streaming UI</p>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <p>Deep Research Agent &middot; <a href="http://localhost:3003" target="_blank">Open App</a></p>
+    </footer>
+  </div>
+</body>
+</html>
