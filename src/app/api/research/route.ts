@@ -84,6 +84,9 @@ async function runResearchWithSandbox(
   }
 
   function processSandboxMessage(sandboxMsg: SandboxMessage) {
+    // Log to Vercel Runtime Logs for debugging
+    console.log(`[Sandbox ${sandboxMsg.type}]`, sandboxMsg.data.substring(0, 200));
+
     if (sandboxMsg.type === "status") {
       controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "status", content: sandboxMsg.data })}\n\n`));
     } else if (sandboxMsg.type === "result") {
@@ -209,21 +212,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const isVercel = isVercelEnvironment();
+    console.log(`[Research API] Starting research for topic: "${topic.substring(0, 50)}..." (Vercel: ${isVercel})`);
+
     const encoder = new TextEncoder();
 
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          if (isVercelEnvironment()) {
+          if (isVercel) {
+            console.log("[Research API] Using Vercel Sandbox...");
             await runResearchWithSandbox(topic, sessionId, controller, encoder);
           } else {
+            console.log("[Research API] Using direct SDK...");
             await runResearchDirect(topic, sessionId, controller, encoder);
           }
 
+          console.log("[Research API] Research completed successfully");
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : "Unknown error";
+          console.error("[Research API] Stream error:", errorMessage);
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ type: "error", content: errorMessage })}\n\n`)
           );
@@ -241,6 +251,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("[Research API] Request error:", errorMessage);
     return new Response(
       JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { "Content-Type": "application/json" } }
